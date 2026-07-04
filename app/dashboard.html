@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OANDA Day Trader</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e;
+        --green:#3fb950;--red:#f85149;--blue:#58a6ff;--amber:#d29922;}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;padding:20px}
+  h1{font-size:18px;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:12px;margin-bottom:20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px}
+  .card .label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .card .value{font-size:20px;font-weight:600;margin-top:4px}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  @media(max-width:900px){.row{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{color:var(--dim);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);font-weight:500}
+  td{padding:6px 8px;border-bottom:1px solid var(--border)}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px}
+  .long{background:#1a3626;color:var(--green)} .short{background:#3d1d1d;color:var(--red)}
+  .ok{color:var(--green)} .no{color:var(--red)}
+  button{background:var(--card);color:var(--text);border:1px solid var(--border);
+         border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--blue)}
+  .banner{padding:8px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;display:none}
+  .banner.halt{display:block;background:#3d1d1d;color:var(--red)}
+  .banner.off{display:block;background:#3a2d10;color:var(--amber)}
+  #chartWrap{height:220px}
+</style>
+</head>
+<body>
+<h1>OANDA Day Trader <span id="env" class="tag" style="background:#1c2a3a;color:var(--blue)"></span></h1>
+<div class="sub">London/NY breakout &middot; confluence-approved &middot; <span id="clock"></span></div>
+
+<div id="haltBanner" class="banner"></div>
+
+<div class="grid">
+  <div class="card"><div class="label">NAV</div><div class="value" id="nav">—</div></div>
+  <div class="card"><div class="label">Balance</div><div class="value" id="balance">—</div></div>
+  <div class="card"><div class="label">Unrealized P&L</div><div class="value" id="upl">—</div></div>
+  <div class="card"><div class="label">Open Trades</div><div class="value" id="openCount">—</div></div>
+  <div class="card"><div class="label">Session</div><div class="value" id="session">—</div></div>
+  <div class="card"><div class="label">Trading</div><div class="value"><button id="toggleBtn">…</button></div></div>
+</div>
+
+<div class="card" style="margin-bottom:20px"><div class="label">Equity (NAV)</div>
+  <div id="chartWrap"><canvas id="equityChart"></canvas></div>
+</div>
+
+<div class="row">
+  <div class="card"><div class="label" style="margin-bottom:8px">Open Positions</div>
+    <table id="openTable"><thead><tr><th>Pair</th><th>Dir</th><th>Units</th><th>Entry</th><th>P&L</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="card"><div class="label" style="margin-bottom:8px">Recent Signals</div>
+    <table id="sigTable"><thead><tr><th>Time</th><th>Pair</th><th>Dir</th><th>Session</th><th>Result</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<div class="card"><div class="label" style="margin-bottom:8px">Executed Trades</div>
+  <table id="tradeTable"><thead><tr><th>Time</th><th>Pair</th><th>Dir</th><th>Units</th><th>Entry</th><th>SL</th><th>TP</th></tr></thead><tbody></tbody></table>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (n,d=2) => n==null ? "—" : Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+const t = ts => ts ? ts.slice(5,16).replace("T"," ") : "";
+let chart;
+
+async function j(url,opts){ const r = await fetch(url,opts); return r.json(); }
+
+async function refresh(){
+  try{
+    const s = await j("/api/status");
+    $("env").textContent = (s.env||"?").toUpperCase();
+    $("clock").textContent = s.time_utc ? s.time_utc.slice(0,19)+" UTC" : "";
+    $("nav").textContent = fmt(s.nav);
+    $("balance").textContent = fmt(s.balance);
+    const u = $("upl"); u.textContent = fmt(s.unrealized_pl);
+    u.className = "value " + (s.unrealized_pl >= 0 ? "pos" : "neg");
+    $("openCount").textContent = s.open_trades ?? "—";
+    $("session").textContent = s.session || "closed";
+    $("toggleBtn").textContent = s.enabled ? "ON — pause" : "OFF — resume";
+    const b = $("haltBanner");
+    if (s.daily_halt){ b.className="banner halt"; b.textContent="Daily loss limit hit — trading halted until next UTC day."; }
+    else if (s.enabled === false){ b.className="banner off"; b.textContent="Trading paused by kill switch."; }
+    else if (s.state === "misconfigured"){ b.className="banner halt"; b.textContent="Misconfigured: "+(s.problems||[]).join("; "); }
+    else b.className="banner";
+
+    const tr = await j("/api/trades");
+    $("openTable").querySelector("tbody").innerHTML = (tr.open||[]).map(x=>{
+      const long = Number(x.currentUnits)>0;
+      return `<tr><td>${x.instrument}</td><td><span class="tag ${long?"long":"short"}">${long?"LONG":"SHORT"}</span></td>
+        <td>${x.currentUnits}</td><td>${x.price}</td>
+        <td class="${Number(x.unrealizedPL)>=0?"ok":"no"}">${fmt(x.unrealizedPL)}</td></tr>`;
+    }).join("") || `<tr><td colspan="5" style="color:var(--dim)">none</td></tr>`;
+
+    $("tradeTable").querySelector("tbody").innerHTML = (tr.history||[]).map(x=>
+      `<tr><td>${t(x.ts)}</td><td>${x.instrument}</td>
+       <td><span class="tag ${x.direction==="long"?"long":"short"}">${x.direction.toUpperCase()}</span></td>
+       <td>${x.units}</td><td>${x.entry}</td><td>${x.stop_loss}</td><td>${x.take_profit}</td></tr>`
+    ).join("") || `<tr><td colspan="7" style="color:var(--dim)">none yet</td></tr>`;
+
+    const sigs = await j("/api/signals");
+    $("sigTable").querySelector("tbody").innerHTML = (sigs||[]).map(x=>
+      `<tr><td>${t(x.ts)}</td><td>${x.instrument}</td>
+       <td><span class="tag ${x.direction==="long"?"long":"short"}">${x.direction.toUpperCase()}</span></td>
+       <td>${x.session}</td>
+       <td class="${x.executed?"ok":"no"}">${x.executed?"executed":(x.veto_reason||"vetoed")}</td></tr>`
+    ).join("") || `<tr><td colspan="5" style="color:var(--dim)">none yet</td></tr>`;
+
+    const eq = await j("/api/equity");
+    const labels = eq.map(x=>t(x.ts)), data = eq.map(x=>x.nav);
+    if(!chart){
+      chart = new Chart($("equityChart"),{type:"line",
+        data:{labels,datasets:[{data,borderColor:"#58a6ff",borderWidth:1.5,pointRadius:0,fill:false,tension:.2}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+          scales:{x:{ticks:{color:"#8b949e",maxTicksLimit:8},grid:{color:"#21262d"}},
+                  y:{ticks:{color:"#8b949e"},grid:{color:"#21262d"}}}}});
+    } else { chart.data.labels=labels; chart.data.datasets[0].data=data; chart.update("none"); }
+  }catch(e){ console.error(e); }
+}
+
+$("toggleBtn").onclick = async () => { await j("/api/toggle",{method:"POST"}); refresh(); };
+refresh(); setInterval(refresh, 15000);
+</script>
+</body>
+</html>
