@@ -230,7 +230,11 @@ class Backtester:
             if active_session(now, self.cfg) is None:
                 continue
 
-            sig = evaluate(inst, candles[:i + 1],
+            # Live only ever fetches the last `candle_count` candles, so the
+            # backtest feeds evaluate() the same trailing window. This is both
+            # faithful to production AND keeps the run O(n) instead of O(n^2).
+            lo = max(0, i + 1 - self.cfg.candle_count)
+            sig = evaluate(inst, candles[lo:i + 1],
                            self.bt.spread_for(inst), self.cfg, now)
             if sig is None:
                 continue
