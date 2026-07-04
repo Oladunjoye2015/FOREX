@@ -22,6 +22,66 @@ Automated forex day-trading system. Session-breakout setups (London and New York
 
 **Risk controls.** 0.5% of NAV risked per trade with exact position sizing; max 2 concurrent trades; one trade per pair per session; 3% daily drawdown circuit breaker halts trading until the next UTC day; hard per-order unit cap; dashboard kill switch.
 
+## Backtest first
+
+**Look at the data before you risk a cent.** The backtester replays the exact
+same `strategy.evaluate()` and `RiskManager` the live engine uses, so a signal
+that would fire (or get vetoed) in production behaves identically here. It needs
+no network and no account — just Python's standard library.
+
+**1. Get historical candles.** Either pull real M15 history from OANDA (run
+locally, a practice token is enough — candles don't need an account ID):
+
+```bash
+export OANDA_API_TOKEN=...        # practice token
+python -m scripts.fetch_oanda_history --from 2024-01-01 --to 2026-07-01
+```
+
+…or generate offline demo data to try the machinery immediately:
+
+```bash
+python scripts/make_synthetic_data.py --days 365
+```
+
+Both write `data/history/<INSTRUMENT>.csv`.
+
+**2. Run the backtest.**
+
+```bash
+python -m scripts.run_backtest --data data/history --nav 10000
+```
+
+This prints a summary and writes to `data/backtest/`:
+
+- `report.md` — headline stats + per-instrument breakdown
+- `trades.csv` — one row per closed trade (entry/exit/outcome/P&L/R-multiple)
+- `equity.csv` — the NAV curve over time
+
+**3. Tune and re-run.** Every knob the live bot reads from the environment also
+drives the backtest, so you can A/B parameters without touching code:
+
+```bash
+RISK_PER_TRADE_PCT=0.25 TP_R_MULT=2.5 RSI_LONG_MIN=60 \
+  python -m scripts.run_backtest --data data/history
+```
+
+### How fills are modelled (and its limits)
+
+- **Entry:** the next bar's open after the breakout close, crossing the spread
+  (buy the ask, sell the bid) plus optional slippage — the earliest a live
+  market order could realistically fill.
+- **Exits:** intrabar against each bar's high/low; if a bar straddles both SL
+  and TP, SL is assumed hit first (conservative). No time stop, matching live.
+- **Spread** is a fixed per-instrument estimate (`app/backtest.py` →
+  `DEFAULT_SPREADS`), used both for the approval check and entry cost. Real
+  spreads widen around news and the session opens this strategy trades — treat
+  backtested costs as a floor.
+- **Caveats:** M15 OHLC hides the intrabar path, so SL/TP-in-same-bar is an
+  approximation; no swap/financing, no partial fills, no requote/rejection
+  modelling. Synthetic data has **no real edge** by construction — it only
+  proves the plumbing. Forward-test on OANDA practice before trusting any
+  number here.
+
 ## Local run
 
 ```bash
@@ -71,15 +131,21 @@ The `/healthz` endpoint is wired to Railway's healthcheck. Anyone with the URL c
 
 ```
 app/
+  candle.py      the Candle datatype (dependency-free)
   config.py      env-driven settings (strategy, risk, sessions)
   oanda.py       async OANDA v20 REST client
   indicators.py  EMA / RSI / ATR (Wilder)
   strategy.py    breakout setup + confluence approval
   risk.py        sizing, daily circuit breaker, exposure caps
+  backtest.py    event-driven backtester (reuses strategy + risk)
   journal.py     SQLite journal: signals, trades, equity
   engine.py      poll → evaluate → gate → execute loop
   main.py        FastAPI app + dashboard endpoints
   dashboard.html live dashboard (Chart.js)
+scripts/
+  fetch_oanda_history.py   download real M15 history to CSV
+  make_synthetic_data.py   offline demo data (no edge, tests plumbing)
+  run_backtest.py          run the backtest, emit report + trade log
 ```
 
 ## Known limitations

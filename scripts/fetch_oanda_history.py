@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import ssl
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -33,11 +34,19 @@ API = {
 }
 
 
+def _ssl_context() -> ssl.SSLContext:
+    try:
+        import certifi
+    except ImportError:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def _get(base: str, token: str, path: str, **params) -> dict:
     import json
     url = f"{base}{path}?{urlencode(params)}"
     req = Request(url, headers={"Authorization": f"Bearer {token}"})
-    with urlopen(req, timeout=30) as r:
+    with urlopen(req, timeout=30, context=_ssl_context()) as r:
         return json.loads(r.read().decode())
 
 

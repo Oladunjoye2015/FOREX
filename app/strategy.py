@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
 from .candle import Candle
 from .config import Settings, SessionWindow
@@ -46,8 +47,11 @@ class Signal:
         return abs(self.entry - self.stop_loss)
 
 
+@lru_cache(maxsize=100_000)
 def _parse_time(ts: str) -> datetime:
     # OANDA RFC3339 with nanoseconds, e.g. 2026-07-04T07:00:00.000000000Z
+    # Cached: in backtests the same candle timestamp is parsed thousands of
+    # times as it slides through the trailing window.
     return datetime.fromisoformat(ts.split(".")[0] + "+00:00")
 
 
