@@ -28,6 +28,9 @@ from .config import Settings, SessionWindow
 from .indicators import atr, ema, rsi
 
 
+WEEKDAY_NAMES = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+
+
 @dataclass
 class Signal:
     instrument: str
@@ -57,7 +60,14 @@ def _parse_time(ts: str) -> datetime:
 
 def active_session(now: datetime, cfg: Settings) -> SessionWindow | None:
     """Return the session whose entry window contains `now`, if any."""
+    if WEEKDAY_NAMES[now.weekday()] in {d.upper()[:3] for d in cfg.disabled_weekdays}:
+        return None
+    if now.hour in set(cfg.disabled_utc_hours):
+        return None
+    enabled = {s.upper() for s in cfg.enabled_sessions}
     for s in cfg.sessions:
+        if s.name.upper() not in enabled:
+            continue
         open_dt = now.replace(hour=s.open_hour_utc, minute=0, second=0, microsecond=0)
         if open_dt <= now < open_dt + timedelta(hours=s.entry_hours):
             return s

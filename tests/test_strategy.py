@@ -33,7 +33,7 @@ def test_indicators():
     print("indicators ok")
 
 
-def test_breakout_long_approved():
+def breakout_long_signal():
     cfg = Settings()
     now = datetime(2026, 7, 6, 8, 30, tzinfo=timezone.utc)   # inside London entry window
     start = now - timedelta(minutes=15 * 399)
@@ -64,8 +64,12 @@ def test_breakout_long_approved():
     # TP should be ~2R
     r = sig.entry - sig.stop_loss
     assert abs((sig.take_profit - sig.entry) - 2 * r) < 1e-9
-    print("breakout long ok")
     return sig
+
+
+def test_breakout_long_approved():
+    breakout_long_signal()
+    print("breakout long ok")
 
 
 def test_spread_veto():
@@ -89,12 +93,30 @@ def test_no_session():
     print("session gating ok")
 
 
+def test_session_filters():
+    cfg = Settings()
+    london = datetime(2026, 7, 6, 8, 30, tzinfo=timezone.utc)  # Monday
+    assert active_session(london, cfg).name == "LONDON"
+
+    cfg.enabled_sessions = ("NEWYORK",)
+    assert active_session(london, cfg) is None
+
+    cfg.enabled_sessions = ("LONDON",)
+    cfg.disabled_weekdays = ("MON",)
+    assert active_session(london, cfg) is None
+
+    cfg.disabled_weekdays = ()
+    cfg.disabled_utc_hours = (8,)
+    assert active_session(london, cfg) is None
+    print("session filters ok")
+
+
 def test_sizing_and_circuit_breaker():
     cfg = Settings()
     rm = RiskManager(cfg)
     now = datetime(2026, 7, 6, 8, 30, tzinfo=timezone.utc)
     rm.roll_day(10_000.0, now)
-    sig = test_breakout_long_approved()
+    sig = breakout_long_signal()
 
     d = rm.evaluate(sig, nav=10_000.0, open_trade_count=0, price_mid=sig.entry)
     assert d.allowed and d.units > 0

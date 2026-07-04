@@ -69,6 +69,9 @@ def write_report(rep: dict, cfg: Settings, out_dir: Path, data_note: str):
         f"- EMA {cfg.ema_fast}/{cfg.ema_slow}, RSI{cfg.rsi_period} (long>= {cfg.rsi_long_min}, short<= {cfg.rsi_short_max})\n"
         f"- Range window {cfg.range_atr_min}-{cfg.range_atr_max} ATR, max extension {cfg.max_extension_atr} ATR\n"
         f"- Max open {cfg.max_open_trades}, daily stop {cfg.max_daily_loss_pct}%, one trade/pair/session={cfg.one_trade_per_session}\n"
+        f"- Instruments: {','.join(cfg.instruments)}  |  Enabled sessions: {','.join(cfg.enabled_sessions)}\n"
+        f"- Disabled weekdays: {','.join(cfg.disabled_weekdays) or 'none'}  |  "
+        f"Disabled UTC hours: {','.join(str(h) for h in cfg.disabled_utc_hours) or 'none'}\n"
     )
     # Per-instrument breakdown.
     trades = rep["trade_list"]
@@ -102,9 +105,12 @@ def main():
     for p in files:
         inst = p.stem
         if inst not in cfg.instruments:
-            # still allow it, strategy is generic
-            pass
+            continue
         data[inst] = load_csv(p)
+    if not data:
+        raise SystemExit(
+            f"No CSVs in {data_dir} match INSTRUMENTS={','.join(cfg.instruments)}."
+        )
 
     bt = Backtester(cfg, BacktestConfig(starting_nav=args.nav))
     rep = bt.run(data)

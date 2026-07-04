@@ -15,6 +15,10 @@ def _b(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _csv(name: str, default: str) -> tuple[str, ...]:
+    return tuple(s.strip() for s in os.getenv(name, default).split(",") if s.strip())
+
+
 @dataclass
 class SessionWindow:
     """A tradeable session: pre-open range window + post-open entry window (UTC)."""
@@ -32,9 +36,9 @@ class Settings:
     oanda_account_id: str = os.getenv("OANDA_ACCOUNT_ID", "")
 
     # --- Universe --------------------------------------------------------
-    instruments: tuple = tuple(
-        os.getenv("INSTRUMENTS", "EUR_USD,GBP_USD,USD_JPY,AUD_USD,USD_CAD").split(",")
-    )
+    instruments: tuple = field(default_factory=lambda: _csv(
+        "INSTRUMENTS", "EUR_USD,GBP_USD,USD_JPY,AUD_USD,USD_CAD"
+    ))
     granularity: str = os.getenv("GRANULARITY", "M15")
     candle_count: int = _i("CANDLE_COUNT", 400)
 
@@ -43,6 +47,11 @@ class Settings:
         SessionWindow("LONDON", _i("LONDON_OPEN_UTC", 7), _i("LONDON_RANGE_H", 5), _i("LONDON_ENTRY_H", 4)),
         SessionWindow("NEWYORK", _i("NY_OPEN_UTC", 12), _i("NY_RANGE_H", 4), _i("NY_ENTRY_H", 4)),
     )
+    enabled_sessions: tuple = field(default_factory=lambda: _csv("ENABLED_SESSIONS", "LONDON,NEWYORK"))
+    disabled_weekdays: tuple = field(default_factory=lambda: _csv("DISABLED_WEEKDAYS", ""))
+    disabled_utc_hours: tuple = field(default_factory=lambda: tuple(
+        int(h) for h in _csv("DISABLED_UTC_HOURS", "") if h.isdigit()
+    ))
 
     # --- Confluence approval layer ----------------------------------------
     ema_fast: int = _i("EMA_FAST", 50)

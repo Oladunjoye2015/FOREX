@@ -22,6 +22,11 @@ Automated forex day-trading system. Session-breakout setups (London and New York
 
 **Risk controls.** 0.5% of NAV risked per trade with exact position sizing; max 2 concurrent trades; one trade per pair per session; 3% daily drawdown circuit breaker halts trading until the next UTC day; hard per-order unit cap; dashboard kill switch.
 
+**Operational filters.** The live engine and backtester can restrict the
+universe, sessions, weekdays, and UTC hours with environment variables. Use
+`INSTRUMENTS`, `ENABLED_SESSIONS`, `DISABLED_WEEKDAYS`, and
+`DISABLED_UTC_HOURS` to keep the bot away from weak slices found in backtests.
+
 ## Backtest first
 
 **Look at the data before you risk a cent.** The backtester replays the exact
@@ -64,6 +69,22 @@ drives the backtest, so you can A/B parameters without touching code:
 RISK_PER_TRADE_PCT=0.25 TP_R_MULT=2.5 RSI_LONG_MIN=60 \
   python -m scripts.run_backtest --data data/history
 ```
+
+Focused practice configuration from the current OANDA history:
+
+```bash
+INSTRUMENTS=EUR_USD,GBP_USD \
+ENABLED_SESSIONS=LONDON \
+DISABLED_WEEKDAYS=FRI \
+RISK_PER_TRADE_PCT=0.25 \
+MAX_OPEN_TRADES=1 \
+MAX_DAILY_LOSS_PCT=1.0 \
+python -m scripts.run_backtest --data data/history --out data/backtest_filtered
+```
+
+On the 2024-01-01 through 2026-06-30 M15 data, this produced `PF 1.15`,
+`+0.100 R/trade`, and `1.74%` max drawdown. Treat that as a practice-forward
+test candidate, not proof of live edge.
 
 ### How fills are modelled (and its limits)
 
@@ -108,6 +129,26 @@ Option A — GitHub (recommended):
 3. In the service → **Variables**, set `OANDA_ENV=practice`, `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`.
 4. Optional but recommended: **Volumes → attach a volume**, mount path `/data`, and set variable `DATA_DIR=/data` so the trade journal survives redeploys.
 5. **Settings → Networking → Generate Domain** to get a URL for the dashboard.
+
+Recommended starting Railway variables for practice forward-testing:
+
+```bash
+OANDA_ENV=practice
+TRADING_ENABLED=true
+INSTRUMENTS=EUR_USD,GBP_USD
+ENABLED_SESSIONS=LONDON
+DISABLED_WEEKDAYS=FRI
+DISABLED_UTC_HOURS=
+GRANULARITY=M15
+CANDLE_COUNT=400
+RISK_PER_TRADE_PCT=0.25
+MAX_OPEN_TRADES=1
+MAX_DAILY_LOSS_PCT=1.0
+MAX_UNITS=50000
+ONE_TRADE_PER_SESSION=true
+DATA_DIR=/data
+POLL_SECONDS=60
+```
 
 Option B — CLI:
 
