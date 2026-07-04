@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from .config import settings
 from .journal import Journal
+from .news_filter import NewsFilter
 from .oanda import OandaClient, OandaError, price_precision
 from .risk import RiskManager
 from .strategy import active_session, evaluate
@@ -18,6 +19,7 @@ class Engine:
     def __init__(self):
         self.cfg = settings
         self.client = OandaClient()
+        self.news_filter = NewsFilter(self.cfg)
         self.risk = RiskManager(self.cfg)
         self.journal = Journal(self.cfg.data_dir)
         self.enabled = self.cfg.trading_enabled
@@ -30,6 +32,7 @@ class Engine:
     async def stop(self):
         if self._task:
             self._task.cancel()
+        await self.news_filter.close()
         await self.client.close()
 
     async def _run(self):
@@ -73,6 +76,7 @@ class Engine:
             "open_trades": len(trades),
             "daily_halt": self.risk.halted_today,
             "day_start_nav": self.risk.day_start_nav,
+            "news_filter": self.news_filter.last_status,
         }
 
         if not (self.enabled and can_trade and session):
@@ -101,6 +105,15 @@ class Engine:
             if not sig.approved:
                 self.journal.log_signal(sig, executed=False,
                                         veto_reason="confluence checks failed")
+                continue
+
+            news_decision = await self.news_filter.allow(inst, now)
+            self.status = {**self.status, "news_filter": self.news_filter.last_status}
+            if not news_decision.allowed:
+                self.journal.log_signal(sig, executed=False,
+                                        veto_reason=news_decision.reason)
+                log.info("Signal vetoed (%s %s): %s", inst, sig.direction,
+                         news_decision.reason)
                 continue
 
             decision = self.risk.evaluate(sig, nav, len(trades), px["mid"])

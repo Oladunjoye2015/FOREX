@@ -19,6 +19,10 @@ def _csv(name: str, default: str) -> tuple[str, ...]:
     return tuple(s.strip() for s in os.getenv(name, default).split(",") if s.strip())
 
 
+def _impact_csv(name: str, default: str) -> tuple[str, ...]:
+    return tuple(s.lower() for s in _csv(name, default))
+
+
 @dataclass
 class SessionWindow:
     """A tradeable session: pre-open range window + post-open entry window (UTC)."""
@@ -84,6 +88,17 @@ class Settings:
     poll_seconds: int = _i("POLL_SECONDS", 60)
     trading_enabled: bool = _b("TRADING_ENABLED", True)
     data_dir: str = os.getenv("DATA_DIR", "./data")
+
+    # --- News / macro-event filter ----------------------------------------
+    news_filter_enabled: bool = _b("NEWS_FILTER_ENABLED", False)
+    news_provider: str = os.getenv("NEWS_PROVIDER", "finnhub").strip().lower()
+    news_api_key: str = os.getenv("NEWS_API_KEY", os.getenv("FINNHUB_API_KEY", ""))
+    news_calendar_url: str = os.getenv("NEWS_CALENDAR_URL", "")
+    news_block_before_min: int = _i("NEWS_BLOCK_BEFORE_MIN", 60)
+    news_block_after_min: int = _i("NEWS_BLOCK_AFTER_MIN", 30)
+    news_min_impacts: tuple = field(default_factory=lambda: _impact_csv("NEWS_MIN_IMPACTS", "high"))
+    news_fail_closed: bool = _b("NEWS_FAIL_CLOSED", True)
+    news_cache_seconds: int = _i("NEWS_CACHE_SECONDS", 900)
 
     @property
     def api_base(self) -> str:

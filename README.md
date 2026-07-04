@@ -27,6 +27,13 @@ universe, sessions, weekdays, and UTC hours with environment variables. Use
 `INSTRUMENTS`, `ENABLED_SESSIONS`, `DISABLED_WEEKDAYS`, and
 `DISABLED_UTC_HOURS` to keep the bot away from weak slices found in backtests.
 
+**News filter.** The live engine can skip otherwise-approved trades around
+high-impact macro events for either currency in the pair. Set
+`NEWS_FILTER_ENABLED=true` with a calendar provider key so the bot stands down
+around releases such as CPI, NFP, rate decisions, GDP, PMI, and central-bank
+events. When `NEWS_FAIL_CLOSED=true`, provider errors block new trades instead
+of allowing blind entries.
+
 ## Backtest first
 
 **Look at the data before you risk a cent.** The backtester replays the exact
@@ -148,6 +155,13 @@ MAX_UNITS=50000
 ONE_TRADE_PER_SESSION=true
 DATA_DIR=/data
 POLL_SECONDS=60
+NEWS_FILTER_ENABLED=true
+NEWS_PROVIDER=finnhub
+NEWS_API_KEY=your-finnhub-key
+NEWS_BLOCK_BEFORE_MIN=60
+NEWS_BLOCK_AFTER_MIN=30
+NEWS_MIN_IMPACTS=high
+NEWS_FAIL_CLOSED=true
 ```
 
 Option B — CLI:
