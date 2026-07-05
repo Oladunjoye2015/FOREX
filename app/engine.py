@@ -23,8 +23,19 @@ class Engine:
         self.risk = RiskManager(self.cfg)
         self.journal = Journal(self.cfg.data_dir)
         self.enabled = self.cfg.trading_enabled
-        self.status: dict = {"state": "starting"}
+        self.status: dict = self._base_status("starting")
         self._task: asyncio.Task | None = None
+
+    def _base_status(self, state: str) -> dict:
+        return {
+            "state": state,
+            "env": self.cfg.oanda_env,
+            "enabled": self.enabled,
+            "session": None,
+            "open_trades": None,
+            "daily_halt": self.risk.halted_today,
+            "news_filter": self.news_filter.last_status,
+        }
 
     def start(self):
         self._task = asyncio.create_task(self._run())
@@ -38,7 +49,7 @@ class Engine:
     async def _run(self):
         problems = self.cfg.validate()
         if problems:
-            self.status = {"state": "misconfigured", "problems": problems}
+            self.status = {**self._base_status("misconfigured"), "problems": problems}
             log.error("Engine not started: %s", problems)
             return
         log.info("Engine started (%s, %s)", self.cfg.oanda_env,
@@ -48,9 +59,14 @@ class Engine:
                 await self._tick()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 log.exception("Tick failed")
-                self.status = {**self.status, "state": "error-retrying"}
+                self.status = {
+                    **self._base_status("error-retrying"),
+                    **self.status,
+                    "state": "error-retrying",
+                    "last_error": str(exc)[:300],
+                }
             await asyncio.sleep(self.cfg.poll_seconds)
 
     async def _tick(self):

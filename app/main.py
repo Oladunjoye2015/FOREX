@@ -59,6 +59,34 @@ async def equity():
     return rows
 
 
+@app.get("/api/summary")
+async def summary():
+    return engine.journal.summary()
+
+
+@app.get("/api/config")
+async def config():
+    cfg = engine.cfg
+    return {
+        "instruments": cfg.instruments,
+        "granularity": cfg.granularity,
+        "candle_count": cfg.candle_count,
+        "enabled_sessions": cfg.enabled_sessions,
+        "disabled_weekdays": cfg.disabled_weekdays,
+        "disabled_utc_hours": cfg.disabled_utc_hours,
+        "risk_per_trade_pct": cfg.risk_per_trade_pct,
+        "max_open_trades": cfg.max_open_trades,
+        "max_daily_loss_pct": cfg.max_daily_loss_pct,
+        "max_units": cfg.max_units,
+        "news_filter_enabled": cfg.news_filter_enabled,
+        "news_provider": cfg.news_provider,
+        "news_block_before_min": cfg.news_block_before_min,
+        "news_block_after_min": cfg.news_block_after_min,
+        "news_min_impacts": cfg.news_min_impacts,
+        "news_fail_closed": cfg.news_fail_closed,
+    }
+
+
 @app.post("/api/toggle")
 async def toggle():
     engine.enabled = not engine.enabled

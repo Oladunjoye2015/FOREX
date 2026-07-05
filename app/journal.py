@@ -85,3 +85,29 @@ class Journal:
                 f"SELECT * FROM {table} ORDER BY id DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def summary(self) -> dict:
+        with self._lock, self._conn() as c:
+            sig = c.execute(
+                "SELECT COUNT(*) total, SUM(executed) executed FROM signals"
+            ).fetchone()
+            trades = c.execute("SELECT COUNT(*) total FROM trades").fetchone()
+            veto_rows = c.execute(
+                "SELECT COALESCE(veto_reason, '') reason, COUNT(*) count "
+                "FROM signals WHERE executed = 0 "
+                "GROUP BY reason ORDER BY count DESC LIMIT 8"
+            ).fetchall()
+            last_signal = c.execute(
+                "SELECT ts, instrument, session, direction, executed, veto_reason "
+                "FROM signals ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        total_signals = int(sig["total"] or 0)
+        executed = int(sig["executed"] or 0)
+        return {
+            "signals": total_signals,
+            "executed_signals": executed,
+            "vetoed_signals": total_signals - executed,
+            "trades": int(trades["total"] or 0),
+            "veto_reasons": [dict(r) for r in veto_rows],
+            "last_signal": dict(last_signal) if last_signal else None,
+        }
