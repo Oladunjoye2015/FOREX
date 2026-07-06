@@ -21,7 +21,7 @@ def test_high_impact_event_blocks_pair_currency():
         "event": "Nonfarm Payrolls",
     }]
     nf._cache_key = ("2026-07-06", "2026-07-06")
-    nf._cache_until = datetime(2026, 7, 6, 9, 0, tzinfo=timezone.utc)
+    nf._cache_until = datetime(2100, 1, 1, tzinfo=timezone.utc)  # never expire in-test
 
     decision = run(nf.allow("EUR_USD", datetime(2026, 7, 6, 8, 30, tzinfo=timezone.utc)))
 
@@ -41,7 +41,7 @@ def test_low_impact_event_does_not_block():
         "event": "Minor Data",
     }]
     nf._cache_key = ("2026-07-06", "2026-07-06")
-    nf._cache_until = datetime(2026, 7, 6, 9, 0, tzinfo=timezone.utc)
+    nf._cache_until = datetime(2100, 1, 1, tzinfo=timezone.utc)  # never expire in-test
 
     decision = run(nf.allow("EUR_USD", datetime(2026, 7, 6, 8, 30, tzinfo=timezone.utc)))
 

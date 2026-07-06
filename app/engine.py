@@ -119,8 +119,11 @@ class Engine:
             if sig is None:
                 continue
             if not sig.approved:
+                failed = ", ".join(k for k, v in sig.checks.items() if not v)
                 self.journal.log_signal(sig, executed=False,
-                                        veto_reason="confluence checks failed")
+                                        veto_reason=f"confluence failed: {failed}")
+                log.info("Signal vetoed (%s %s): confluence failed: %s",
+                         inst, sig.direction, failed)
                 continue
 
             news_decision = await self.news_filter.allow(inst, now)
