@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS equity (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT, balance REAL, nav REAL, unrealized REAL, open_trades INTEGER
 );
+CREATE TABLE IF NOT EXISTS runtime_settings (
+    key TEXT PRIMARY KEY, value TEXT, updated_at TEXT
+);
 """
 
 
@@ -76,6 +79,22 @@ class Journal:
             c.execute(
                 "INSERT INTO equity (ts,balance,nav,unrealized,open_trades) VALUES (?,?,?,?,?)",
                 (self._now(), balance, nav, unrealized, open_trades),
+            )
+
+    def get_setting(self, key: str) -> str | None:
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT value FROM runtime_settings WHERE key = ?", (key,)
+            ).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str):
+        with self._lock, self._conn() as c:
+            c.execute(
+                "INSERT INTO runtime_settings (key, value, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
+                "updated_at=excluded.updated_at",
+                (key, value, self._now()),
             )
 
     def recent(self, table: str, limit: int = 100) -> list[dict]:

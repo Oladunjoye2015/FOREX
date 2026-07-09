@@ -47,9 +47,15 @@ class Settings:
     candle_count: int = _i("CANDLE_COUNT", 400)
 
     # --- Sessions (UTC; adjust for DST if you care about exact opens) -----
+    # LONNY = the London/New York overlap (~13:00-16:00 UTC), the deepest
+    # liquidity window of the day. Its pre-open range is the London morning.
+    # Note: sessions are matched in order and only one is active at a time,
+    # so if NEWYORK and LONNY are both enabled, NEWYORK wins 13:00-16:00.
+    # Typical pairings: "LONDON,LONNY" or "LONDON,NEWYORK".
     sessions: tuple = (
         SessionWindow("LONDON", _i("LONDON_OPEN_UTC", 7), _i("LONDON_RANGE_H", 5), _i("LONDON_ENTRY_H", 4)),
         SessionWindow("NEWYORK", _i("NY_OPEN_UTC", 12), _i("NY_RANGE_H", 4), _i("NY_ENTRY_H", 4)),
+        SessionWindow("LONNY", _i("OVERLAP_OPEN_UTC", 13), _i("OVERLAP_RANGE_H", 4), _i("OVERLAP_ENTRY_H", 3)),
     )
     enabled_sessions: tuple = field(default_factory=lambda: _csv("ENABLED_SESSIONS", "LONDON,NEWYORK"))
     disabled_weekdays: tuple = field(default_factory=lambda: _csv("DISABLED_WEEKDAYS", ""))

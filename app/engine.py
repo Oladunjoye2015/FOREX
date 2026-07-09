@@ -23,8 +23,37 @@ class Engine:
         self.risk = RiskManager(self.cfg)
         self.journal = Journal(self.cfg.data_dir)
         self.enabled = self.cfg.trading_enabled
+        self._load_session_override()
         self.status: dict = self._base_status("starting")
         self._task: asyncio.Task | None = None
+
+    # ---- runtime session switching ------------------------------------
+
+    @property
+    def available_sessions(self) -> list[str]:
+        return [s.name for s in self.cfg.sessions]
+
+    def _load_session_override(self):
+        """Dashboard choice persisted in the journal wins over the env var."""
+        saved = self.journal.get_setting("enabled_sessions")
+        if saved:
+            names = [s for s in saved.split(",") if s in self.available_sessions]
+            if names:
+                self.cfg.enabled_sessions = tuple(names)
+                log.info("Loaded session override from journal: %s", names)
+
+    def set_sessions(self, names: list[str]) -> tuple[bool, str]:
+        valid = self.available_sessions
+        cleaned = [n.strip().upper() for n in names]
+        bad = [n for n in cleaned if n not in valid]
+        if bad:
+            return False, f"unknown sessions: {', '.join(bad)} (valid: {', '.join(valid)})"
+        if not cleaned:
+            return False, "at least one session must stay enabled (use the pause switch to stop trading)"
+        self.cfg.enabled_sessions = tuple(dict.fromkeys(cleaned))  # dedupe, keep order
+        self.journal.set_setting("enabled_sessions", ",".join(self.cfg.enabled_sessions))
+        log.info("Sessions switched via dashboard: %s", self.cfg.enabled_sessions)
+        return True, ""
 
     def _base_status(self, state: str) -> dict:
         return {

@@ -8,6 +8,8 @@ Automated forex day-trading system. Session-breakout setups (London and New York
 
 **Setup (trigger).** For each session the bot builds the pre-open range (default: 5 hours before London 07:00 UTC, 4 hours before New York 12:00 UTC) from M15 candles. A completed candle closing beyond the range high or low inside the entry window (first 4 hours of the session) is a breakout candidate.
 
+A third session, `LONNY`, targets the London/New York overlap (13:00–16:00 UTC by default) — the deepest-liquidity window of the day. Its pre-open range is the London morning (09:00–13:00 UTC). Enable it via `ENABLED_SESSIONS=LONDON,LONNY`; tune with `OVERLAP_OPEN_UTC`, `OVERLAP_RANGE_H`, `OVERLAP_ENTRY_H`. Sessions are matched in order and only one is active at a time, so if `NEWYORK` and `LONNY` are both enabled, `NEWYORK` claims the 13:00–16:00 hours.
+
 **Approval layer (all five must pass or the signal is vetoed and journaled).**
 
 | Check | Rule (defaults) |
@@ -21,6 +23,12 @@ Automated forex day-trading system. Session-breakout setups (London and New York
 **Trade construction.** Market order with SL/TP attached to the fill. SL = 1.5×ATR from entry (and always beyond the broken range edge); TP = 2R.
 
 **Risk controls.** 0.5% of NAV risked per trade with exact position sizing; max 2 concurrent trades; one trade per pair per session; 3% daily drawdown circuit breaker halts trading until the next UTC day; hard per-order unit cap; dashboard kill switch.
+
+**Dashboard session switcher.** Sessions can also be toggled live from the
+dashboard sidebar (no redeploy). The choice is stored in the journal DB and
+overrides `ENABLED_SESSIONS` on every restart; it takes effect on the next
+engine tick. At least one session must stay enabled — use the pause switch to
+stop trading entirely.
 
 **Operational filters.** The live engine and backtester can restrict the
 universe, sessions, weekdays, and UTC hours with environment variables. Use

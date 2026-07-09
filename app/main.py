@@ -6,7 +6,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
 from .engine import Engine
 
@@ -72,6 +73,11 @@ async def config():
         "granularity": cfg.granularity,
         "candle_count": cfg.candle_count,
         "enabled_sessions": cfg.enabled_sessions,
+        "available_sessions": engine.available_sessions,
+        "session_windows": {
+            s.name: {"open_utc": s.open_hour_utc, "entry_hours": s.entry_hours}
+            for s in cfg.sessions
+        },
         "disabled_weekdays": cfg.disabled_weekdays,
         "disabled_utc_hours": cfg.disabled_utc_hours,
         "risk_per_trade_pct": cfg.risk_per_trade_pct,
@@ -91,6 +97,18 @@ async def config():
 async def toggle():
     engine.enabled = not engine.enabled
     return {"enabled": engine.enabled}
+
+
+class SessionUpdate(BaseModel):
+    sessions: list[str]
+
+
+@app.post("/api/sessions")
+async def set_sessions(body: SessionUpdate):
+    ok, err = engine.set_sessions(body.sessions)
+    if not ok:
+        return JSONResponse({"ok": False, "error": err}, status_code=422)
+    return {"ok": True, "enabled_sessions": engine.cfg.enabled_sessions}
 
 
 @app.get("/", response_class=HTMLResponse)

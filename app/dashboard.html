@@ -55,6 +55,12 @@
   .banner{display:none;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px}
   .banner.show{display:block}.banner.bad{background:#351b1b;border-color:#673434;color:#ffbbb6}.banner.warn{background:#332712;border-color:#6f5524;color:#f4d18c}
   .empty{color:var(--muted);padding:10px 6px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--border);background:var(--panel2);color:var(--muted);
+        border-radius:999px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:700}
+  .chip:hover{border-color:var(--blue)}
+  .chip.active{background:#173320;border-color:#2e7a4b;color:#aaf0c4}
+  .chip:disabled{opacity:.5;cursor:wait}
   @media(max-width:1050px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--border)}.grid{grid-template-columns:repeat(2,1fr)}.layout,.split{grid-template-columns:1fr}}
   @media(max-width:560px){main,aside{padding:12px}.grid{grid-template-columns:1fr}.topbar{display:block}.card .value{font-size:19px}}
 </style>
@@ -79,6 +85,11 @@
       <h2>Controls</h2>
       <button id="toggleBtn" class="toggle">Loading</button>
       <div class="small" style="margin-top:9px">The switch pauses new entries only. It does not close existing OANDA trades.</div>
+    </div>
+    <div class="sideBlock">
+      <h2>Sessions</h2>
+      <div id="sessionChips" class="chips"></div>
+      <div class="small" id="sessionMsg" style="margin-top:9px">Click to enable/disable. Takes effect on the next engine tick (&le;60s) and survives restarts.</div>
     </div>
     <div class="sideBlock">
       <h2>Configuration</h2>
@@ -216,6 +227,46 @@ function renderConfig(c){
   $("cfgDays").textContent = (c.disabled_weekdays || []).join(", ") || "none";
   $("cfgRisk").textContent = `${c.risk_per_trade_pct ?? "-"}%`;
   $("cfgNews").textContent = c.news_filter_enabled ? `${c.news_provider} on` : "off";
+  renderSessionChips(c);
+}
+
+let sessionBusy = false;
+function renderSessionChips(c){
+  if(sessionBusy) return;  // don't repaint mid-click
+  const avail = c.available_sessions || [];
+  const enabled = new Set(c.enabled_sessions || []);
+  const wins = c.session_windows || {};
+  $("sessionChips").innerHTML = avail.map(name => {
+    const w = wins[name];
+    const hours = w ? ` (${String(w.open_utc).padStart(2,"0")}-${String((w.open_utc + w.entry_hours) % 24).padStart(2,"0")} UTC)` : "";
+    return `<button class="chip ${enabled.has(name) ? "active" : ""}" data-session="${name}" title="${name}${hours}">${name}${hours}</button>`;
+  }).join("");
+  $("sessionChips").querySelectorAll(".chip").forEach(btn => {
+    btn.onclick = () => toggleSession(btn.dataset.session, avail, enabled);
+  });
+}
+
+async function toggleSession(name, avail, enabled){
+  const next = avail.filter(s => enabled.has(s) !== (s === name));
+  sessionBusy = true;
+  $("sessionChips").querySelectorAll(".chip").forEach(b => b.disabled = true);
+  try{
+    const res = await fetch("/api/sessions", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({sessions: next})
+    });
+    const data = await res.json();
+    if(!res.ok || data.ok === false){
+      $("sessionMsg").textContent = data.error || `Update failed (${res.status})`;
+    } else {
+      $("sessionMsg").textContent = `Enabled: ${data.enabled_sessions.join(", ")}. Applies on the next tick.`;
+    }
+  }catch(err){
+    $("sessionMsg").textContent = `Update failed: ${err.message}`;
+  }finally{
+    sessionBusy = false;
+    refresh();
+  }
 }
 
 function renderSummary(s){
