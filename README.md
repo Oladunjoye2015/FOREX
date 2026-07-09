@@ -182,7 +182,7 @@ railway variables set OANDA_ENV=practice OANDA_API_TOKEN=... OANDA_ACCOUNT_ID=..
 railway up
 ```
 
-The `/healthz` endpoint is wired to Railway's healthcheck. Anyone with the URL can see the dashboard and hit the kill switch — keep the domain private or put it behind Railway's private networking / an auth proxy before going live.
+The `/healthz` endpoint is wired to Railway's healthcheck. Set `DASHBOARD_PASSWORD` (and optionally `DASHBOARD_USER`, default `trader`) to put the entire dashboard and API behind HTTP Basic auth — your browser will prompt once and remember it. Only `/healthz` stays open, for Railway's healthcheck. With no password set, anyone with the URL can view the dashboard and flip the kill switch and session toggles, so set one before sharing the URL or going live.
 
 ## Going live (when you're ready — don't rush this)
 

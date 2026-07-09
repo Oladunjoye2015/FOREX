@@ -1,12 +1,15 @@
 """FastAPI app: serves the dashboard and hosts the trading engine."""
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from .engine import Engine
@@ -18,6 +21,23 @@ logging.basicConfig(
 
 engine = Engine()
 
+# --- HTTP Basic auth (set DASHBOARD_PASSWORD to enable) --------------------
+DASHBOARD_USER = os.getenv("DASHBOARD_USER", "trader")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+
+
+def _authorized(auth_header: str) -> bool:
+    """Constant-time check of an 'Authorization: Basic ...' header."""
+    if not auth_header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(auth_header[6:], validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return False
+    user, _, password = decoded.partition(":")
+    return (secrets.compare_digest(user, DASHBOARD_USER)
+            and secrets.compare_digest(password, DASHBOARD_PASSWORD))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,6 +47,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OANDA Day Trader", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    # /healthz stays open for Railway's healthcheck. Everything else —
+    # dashboard, read APIs, and control endpoints — requires the password.
+    if DASHBOARD_PASSWORD and request.url.path != "/healthz":
+        if not _authorized(request.headers.get("Authorization", "")):
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="OANDA Day Trader"'},
+            )
+    return await call_next(request)
 
 
 @app.get("/healthz")
