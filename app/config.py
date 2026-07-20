@@ -64,6 +64,12 @@ class Settings:
     ))
 
     # --- Confluence approval layer ----------------------------------------
+    # Individual checks can be switched off for A/B testing (default all on).
+    check_trend: bool = _b("CHECK_TREND", True)
+    check_momentum: bool = _b("CHECK_MOMENTUM", True)
+    check_volatility: bool = _b("CHECK_VOLATILITY", True)
+    check_extension: bool = _b("CHECK_EXTENSION", True)
+    check_spread: bool = _b("CHECK_SPREAD", True)
     ema_fast: int = _i("EMA_FAST", 50)
     ema_slow: int = _i("EMA_SLOW", 200)
     rsi_period: int = _i("RSI_PERIOD", 14)

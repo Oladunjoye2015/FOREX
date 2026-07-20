@@ -143,6 +143,24 @@ def evaluate(instrument: str, candles: list[Candle], spread: float,
         "extension": extension <= cfg.max_extension_atr * atr_v,
         "spread": spread <= cfg.max_spread_atr * atr_v,
     }
+    # Disabled checks always pass (CHECK_TREND=false etc.) — for A/B testing
+    # a filter's value in backtests and forward tests.
+    for name, on in (("trend", cfg.check_trend), ("momentum", cfg.check_momentum),
+                     ("volatility", cfg.check_volatility),
+                     ("extension", cfg.check_extension), ("spread", cfg.check_spread)):
+        if not on:
+            checks[name] = True
+
+    # Raw values journaled alongside pass/fail so near-misses are visible.
+    metrics = {
+        "ema_fast": round(ema_f, 6), "ema_slow": round(ema_s, 6),
+        "rsi": round(rsi_v, 1), "atr": round(atr_v, 6),
+        "range_atr_ratio": round(range_h / atr_v, 2),
+        "extension_atr_ratio": round(extension / atr_v, 2),
+        "spread": round(spread, 6),
+        "spread_atr_ratio": round(spread / atr_v, 3),
+        "spread_limit": cfg.max_spread_atr,
+    }
 
     entry = last.c
     if direction == "long":
@@ -156,6 +174,6 @@ def evaluate(instrument: str, candles: list[Candle], spread: float,
         instrument=instrument, session=session.name, direction=direction,
         entry=entry, stop_loss=sl, take_profit=tp, atr=atr_v,
         range_high=range_high, range_low=range_low,
-        checks={k: bool(v) for k, v in checks.items()},
+        checks={**{k: bool(v) for k, v in checks.items()}, "_values": metrics},
         approved=all(checks.values()),
     )
