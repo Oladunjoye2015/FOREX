@@ -87,6 +87,11 @@
       <div class="small" style="margin-top:9px">The switch pauses new entries only. It does not close existing OANDA trades.</div>
     </div>
     <div class="sideBlock">
+      <h2>Strategy</h2>
+      <div id="strategyChips" class="chips"></div>
+      <div class="small" id="strategyMsg" style="margin-top:9px">breakout = session-range breakout &middot; meanrev = Bollinger fade. One active at a time.</div>
+    </div>
+    <div class="sideBlock">
       <h2>Sessions</h2>
       <div id="sessionChips" class="chips"></div>
       <div class="small" id="sessionMsg" style="margin-top:9px">Click to enable/disable. Takes effect on the next engine tick (&le;60s) and survives restarts.</div>
@@ -228,6 +233,41 @@ function renderConfig(c){
   $("cfgRisk").textContent = `${c.risk_per_trade_pct ?? "-"}%`;
   $("cfgNews").textContent = c.news_filter_enabled ? `${c.news_provider} on` : "off";
   renderSessionChips(c);
+  renderStrategyChips(c);
+}
+
+let strategyBusy = false;
+function renderStrategyChips(c){
+  if(strategyBusy) return;
+  const avail = c.available_strategies || [];
+  const active = c.strategy;
+  $("strategyChips").innerHTML = avail.map(name =>
+    `<button class="chip ${name === active ? "active" : ""}" data-strategy="${name}">${name}</button>`
+  ).join("");
+  $("strategyChips").querySelectorAll(".chip").forEach(btn => {
+    btn.onclick = () => switchStrategy(btn.dataset.strategy, active);
+  });
+}
+
+async function switchStrategy(name, current){
+  if(name === current) return;
+  strategyBusy = true;
+  $("strategyChips").querySelectorAll(".chip").forEach(b => b.disabled = true);
+  try{
+    const res = await fetch("/api/strategy", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({strategy: name})
+    });
+    const data = await res.json();
+    $("strategyMsg").textContent = (!res.ok || data.ok === false)
+      ? (data.error || `Switch failed (${res.status})`)
+      : `Active strategy: ${data.strategy}. Applies on the next tick.`;
+  }catch(err){
+    $("strategyMsg").textContent = `Switch failed: ${err.message}`;
+  }finally{
+    strategyBusy = false;
+    refresh();
+  }
 }
 
 let sessionBusy = false;

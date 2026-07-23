@@ -63,6 +63,20 @@ class Settings:
         int(h) for h in _csv("DISABLED_UTC_HOURS", "") if h.isdigit()
     ))
 
+    # --- Strategy selection -------------------------------------------------
+    # "breakout" (session-range breakout) | "meanrev" (Bollinger fade).
+    # Also switchable at runtime from the dashboard (journal-persisted).
+    strategy: str = os.getenv("STRATEGY", "breakout").strip().lower()
+
+    # --- Mean-reversion parameters -----------------------------------------
+    bb_period: int = _i("BB_PERIOD", 20)
+    bb_std: float = _f("BB_STD", 2.0)
+    mr_rsi_long_max: float = _f("MR_RSI_LONG_MAX", 30.0)   # RSI <= this for longs
+    mr_rsi_short_min: float = _f("MR_RSI_SHORT_MIN", 70.0) # RSI >= this for shorts
+    mr_max_trend_atr: float = _f("MR_MAX_TREND_ATR", 1.0)  # EMA gap <= this * ATR
+    mr_sl_atr_mult: float = _f("MR_SL_ATR_MULT", 1.5)
+    mr_min_rr: float = _f("MR_MIN_RR", 0.8)                # reward >= this * risk
+
     # --- Confluence approval layer ----------------------------------------
     # Individual checks can be switched off for A/B testing (default all on).
     check_trend: bool = _b("CHECK_TREND", True)

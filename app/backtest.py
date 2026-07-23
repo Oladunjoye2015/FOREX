@@ -30,7 +30,8 @@ from datetime import datetime, timezone
 from .candle import Candle
 from .config import Settings
 from .risk import RiskManager
-from .strategy import Signal, active_session, evaluate, _parse_time
+from .strategies import get_evaluator
+from .strategy import Signal, active_session, _parse_time
 
 
 # Typical dealing spreads in PRICE units, used both for the approval "spread"
@@ -234,8 +235,8 @@ class Backtester:
             # backtest feeds evaluate() the same trailing window. This is both
             # faithful to production AND keeps the run O(n) instead of O(n^2).
             lo = max(0, i + 1 - self.cfg.candle_count)
-            sig = evaluate(inst, candles[lo:i + 1],
-                           self.bt.spread_for(inst), self.cfg, now)
+            sig = get_evaluator(self.cfg.strategy)(inst, candles[lo:i + 1],
+                                                   self.bt.spread_for(inst), self.cfg, now)
             if sig is None:
                 continue
             self.signals_evaluated += 1

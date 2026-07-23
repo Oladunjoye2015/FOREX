@@ -101,7 +101,10 @@ async def summary():
 @app.get("/api/config")
 async def config():
     cfg = engine.cfg
+    from .strategies import STRATEGIES
     return {
+        "strategy": cfg.strategy,
+        "available_strategies": list(STRATEGIES),
         "instruments": cfg.instruments,
         "granularity": cfg.granularity,
         "candle_count": cfg.candle_count,
@@ -130,6 +133,18 @@ async def config():
 async def toggle():
     engine.enabled = not engine.enabled
     return {"enabled": engine.enabled}
+
+
+class StrategyUpdate(BaseModel):
+    strategy: str
+
+
+@app.post("/api/strategy")
+async def set_strategy(body: StrategyUpdate):
+    ok, err = engine.set_strategy(body.strategy)
+    if not ok:
+        return JSONResponse({"ok": False, "error": err}, status_code=422)
+    return {"ok": True, "strategy": engine.cfg.strategy}
 
 
 class SessionUpdate(BaseModel):

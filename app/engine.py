@@ -10,7 +10,8 @@ from .journal import Journal
 from .news_filter import NewsFilter
 from .oanda import OandaClient, OandaError, price_precision
 from .risk import RiskManager
-from .strategy import active_session, evaluate
+from .strategies import STRATEGIES, get_evaluator
+from .strategy import active_session
 
 log = logging.getLogger("engine")
 
@@ -24,6 +25,7 @@ class Engine:
         self.journal = Journal(self.cfg.data_dir)
         self.enabled = self.cfg.trading_enabled
         self._load_session_override()
+        self._load_strategy_override()
         self.status: dict = self._base_status("starting")
         self._task: asyncio.Task | None = None
 
@@ -41,6 +43,21 @@ class Engine:
             if names:
                 self.cfg.enabled_sessions = tuple(names)
                 log.info("Loaded session override from journal: %s", names)
+
+    def _load_strategy_override(self):
+        saved = self.journal.get_setting("strategy")
+        if saved and saved in STRATEGIES:
+            self.cfg.strategy = saved
+            log.info("Loaded strategy override from journal: %s", saved)
+
+    def set_strategy(self, name: str) -> tuple[bool, str]:
+        name = name.strip().lower()
+        if name not in STRATEGIES:
+            return False, f"unknown strategy '{name}' (valid: {', '.join(STRATEGIES)})"
+        self.cfg.strategy = name
+        self.journal.set_setting("strategy", name)
+        log.info("Strategy switched via dashboard: %s", name)
+        return True, ""
 
     def set_sessions(self, names: list[str]) -> tuple[bool, str]:
         valid = self.available_sessions
@@ -117,6 +134,7 @@ class Engine:
             "env": self.cfg.oanda_env,
             "enabled": self.enabled,
             "session": session.name if session else None,
+            "strategy": self.cfg.strategy,
             "nav": nav, "balance": balance, "unrealized_pl": unrealized,
             "open_trades": len(trades),
             "daily_halt": self.risk.halted_today,
@@ -144,7 +162,7 @@ class Engine:
                 log.warning("Candles failed for %s: %s", inst, e)
                 continue
 
-            sig = evaluate(inst, candles, px["spread"], self.cfg, now)
+            sig = get_evaluator(self.cfg.strategy)(inst, candles, px["spread"], self.cfg, now)
             if sig is None:
                 continue
             if not sig.approved:
